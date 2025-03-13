@@ -67,4 +67,4 @@ if __name__ == '__main__':
     entities = ['Q25188', 'Q13417189']
     props, labels = get_backward_relations(entities)
     options = '\n'.join([f"{p}: {l}" for p, l in zip(props, labels)])
-    print(options)
+    logger.info(options)

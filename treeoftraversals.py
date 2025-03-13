@@ -22,6 +22,9 @@ import wikidata.relation_options
 import wikidata.expand_edges
 from wikidata.link_musicbrainz import link_wikidata_to_musicbrainz
 
+import logging
+logger = logging.getLogger(__name__)
+
 logging.basicConfig(level=logging.WARN)
 
 class Actions:
@@ -206,11 +209,12 @@ class TreeOfTraversals:
         return state
     
     def visualize(self):
-        print("Visualizing tree")
+        logger.info("Visualizing tree")
         tree = Tree()
         tree_nodes = [self.state_tree]
         while tree_nodes:
             cur = tree_nodes.pop()
+            # raise RuntimeError()
             action_text = cur.state.get_last_action() if cur.state.trajectory else self.query
             tree.create_node(f"{cur.order}: {action_text} - Value {cur.value}", cur.order, parent=cur.parent.order if cur.parent else None)
             tree_nodes.extend(cur.children)
@@ -218,7 +222,7 @@ class TreeOfTraversals:
             self.use_streamlit['search_tree'].text("Search Tree:\n" + tree.show(stdout=False))
             self.use_streamlit['knowledge_graph'].text("Knowledge Graph:\n" + self.cur_node.state.kg_str())
         else:
-            print(tree.show(stdout=False))
+            logger.info(tree.show(stdout=False))
 
     def run(self, query):
         self.expansion_count = 0
@@ -233,7 +237,7 @@ class TreeOfTraversals:
         while not self.found_answer and self.expansion_count < self.max_expansions:
             self.step()
         if self.expansion_count >= self.max_expansions:
-            print('Hit max expansions, stopping')
+            logger.info('Hit max expansions, stopping')
             if not self.answer_state():
                 cur_node = self.select_node()
                 answers = self.sample_answer(cur_node.state)
@@ -257,7 +261,7 @@ class TreeOfTraversals:
     def step(self):
         cur_node = self.select_node()
         if cur_node is None:
-            print("No eligible states to expand in tree.")
+            logger.info("No eligible states to expand in tree.")
             self.expansion_count = self.max_expansions  # TODO: Hacky way to end loop
             return
         cur_node.order = self.expansion_count
@@ -286,7 +290,7 @@ class TreeOfTraversals:
                 if found_answer and value >= self.answer_threshold:  # "definitely correct" threshold
                     self.found_answer = True
             except ValueError as e:
-                print(f"ValueError: {str(e)}")
+                logger.info(f"ValueError: {str(e)}")
                 self.invalid_action(new_state, e)
                 # Does not add errors as children nodes
                 # If no valid children then the node can be reselected
@@ -294,7 +298,7 @@ class TreeOfTraversals:
                 # terminal = False  # TODO: Set to true but need to account for case where there is no nodes able to be expanded
                 # child = cur_node.make_child(new_state, terminal=terminal)
                 # child.set_value(0.0)
-                # print(0.0)
+                # logger.info(0.0)
         if not cur_node.children:
             if new_state is not None: # no error free children but there were children generated
                 child = cur_node.make_child(new_state)  # add one error state to allow progress to continue
@@ -309,12 +313,14 @@ class TreeOfTraversals:
         if data is None:
             data = {}
         data['query'] = query
-        result = self.llm(extract_entities_prompt_template.format(query=query), n=1, temperature=0.0)
+        logger.info(f"Query: {query}")
+        result = self.llm(extract_entities_prompt_template.format(query=query), n=1, temperature=1.0)
+        result[0] = "Entities:\n" + result[0]
         if 'Entities:' in result[0]:
-            result[0] = result[0].split('Entities:')[1].strip()
-        result[0] = result[0].split('\n\n')[0].split('\n \n')[0]
+            result[0] = result[0].split('Entities:')[-1].strip()
+        result[0] = result[0].split('\n\n')[-1].split('\n \n')[-1]
         data['entities'] = result[0]
-        print(f"Extracted entities\n{data['entities']}")
+        logger.info(f"Extracted entities\n{data['entities']}")
         extracted_entities = parse_elements(data['entities'])
         matched_entities = {}
         wd2ent = {}
@@ -346,7 +352,7 @@ class TreeOfTraversals:
         for key, value in initial_data.items():
             initial_state.add_entity(key, value['label'], value['description'], kb2id_dict=value)  # value contains other keys as well but also contains wikidata/musicbrainz
         initial_state.add_entity_group([k for k in initial_data.keys()])
-        print(initial_state.kg_str())
+        logger.info(initial_state.kg_str())
         return initial_state
 
     def select_node(self) -> StateTreeNode:
@@ -383,9 +389,9 @@ class TreeOfTraversals:
         return results
 
     def sample_k_outputs(self, prompt, stop='\n', oversample=None, match_pattern=None, max_tokens=None, use_match_as_action=True):
-        # print(prompt + "\n")
+        logger.info("Sample k output prompt: \n" + prompt + "\n")
         k = oversample or self.sample_breadth
-        results = self.llm(prompt, n=k, stop=stop, max_tokens=max_tokens)
+        results = self.llm(prompt, n=k, stop=stop)
         match_results = results
         if match_pattern is not None:
             match_results = [", ".join(re.findall(match_pattern, r)) for r in results]
@@ -394,7 +400,7 @@ class TreeOfTraversals:
             most_common = counts.most_common(n=self.sample_breadth)
             results = [r[0] for r in most_common]
         results = [r.strip() for r in results]
-        # print(results)
+        # logger.info(results)
         return results
 
     def sample_default(self, state: WikidataTreeState):
@@ -413,7 +419,7 @@ class TreeOfTraversals:
 
     def default(self, state: WikidataTreeState, argument):
         for action_choice in DEFAULT_ACTION_CHAINS:  # need to match one of the options
-            if re.match(f"{action_choice}.*", argument.strip()) is not None:
+            if re.match(f".\n{action_choice}.*", argument.strip()) is not None:
                 arg = action_choice.join(argument.split(action_choice)[1:])  # only split the first action selection.
                 if action_choice == Actions.THINK:  # THINK requires no additional action samples
                     arg = arg.split('ANSWER:')[0]
@@ -660,9 +666,9 @@ class TreeOfTraversals:
             kg_state = state.kg_str()
             answer = self.answer_from_state(state)
             full_prompt = EVALUATE_ANSWER_PROMPT.format(query=query, answer=answer, kg_state=kg_state)
-            # print(full_prompt)
+            # logger.info(full_prompt)
             result = self.llm(full_prompt, stop=None, n=1, temperature=0)[0]
-            # print(result)
+            # logger.info(result)
         else:
             current_prompt = EVALUATE_STATE_PROMPT
             full_prompt = self.construct_full_prompt(current_prompt, state)
@@ -671,10 +677,10 @@ class TreeOfTraversals:
                 return 0.0
             else:
                 result = result[0]
-            # print(result)
+            # logger.info(result)
         value_match = re.search("\d\.\d+", result)
         if value_match is None:
-            print(f"Could not get value of '{result}'")
+            logger.info(f"Could not get value of '{result}'")
             value = 0.0
         else:
             value = float(value_match[0])

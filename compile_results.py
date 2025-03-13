@@ -11,7 +11,7 @@ def main():
         for res_file in os.listdir(subdir):
             res = read_file(subdir, res_file)
             mean_score = average_score(res)
-            print(f"{subdir}/{res_file}\n\tsamples:{len(res)}\tscore:{mean_score}")
+            logger.info(f"{subdir}/{res_file}\n\tsamples:{len(res)}\tscore:{mean_score}")
 
 
 def read_file(subdir, filename):

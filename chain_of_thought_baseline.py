@@ -18,4 +18,4 @@ def chain_of_thought(query, llm):
 if __name__=="__main__":
     llm = get_llm('gpt-3.5-turbo')
     args = parser.parse_args()
-    print(chain_of_thought(args.query, llm))
+    logger.info(chain_of_thought(args.query, llm))

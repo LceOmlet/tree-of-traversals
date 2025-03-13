@@ -24,4 +24,4 @@ def titles_to_qids(titles):
 
 if __name__ == "__main__":
     titles = ["Donald Trump", "Muza Niýazowa", "Tiger"]
-    print(titles_to_qids(titles))
+    logger.info(titles_to_qids(titles))

@@ -22,6 +22,10 @@ import wikipedia
 from wikidata.label_desc_from_qids import query_label_and_descriptions
 from wikidata.title_to_qid import titles_to_qids
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 mapper = WikiMapper("index_enwiki-latest.db")
 
 extract_entities_prompt_template = """\
@@ -29,7 +33,7 @@ Query: {query}
 
 Identify unique knowledge graph entities in the above query. Include only specific entities named in the query (people/places/organizations/events).
 Add a 1-3 word disambiguation if necessary. The disambiguation should be clear from the query. Otherwise, leave disambiguation blank.
-Separate the entity label and description with a ' - '
+
 
 << EXAMPLE >>
 Query: What is the place of birth of the performer of song When I was Your Man?
@@ -44,10 +48,6 @@ Hermione Granger - character from the Harry Potter stories
 Query: When did Jean Martin's husband die?
 Jean Martin - 
 
-Query: What actors played in the Dark Knight?
-Entities:
-The Dark Knight - film
-
 Query: "How many languages are widely used in India?"
 Entities:
 India - country
@@ -61,14 +61,18 @@ Query: "Where was the director of film Batman (1989) born?"
 Entities:
 Batman - a 1989 film
 
-Query: "Who is the husband of John McGregor?"
-Entities:
-John McGregor - 
-<< END EXAMPLE>
+<< END EXAMPLE >>
 
-Sure, I can help you with that.
+
+Fomatting rule: ```Entities:\n Separate the entity label and description with a ' - ', the short explaination on the right of ' - ' can be ormited if doesn't exist```
+
+Please strictly and directly prompt out the results formated as the **formmating rule** describes after thinking like the above listed results.
+
+We are not allowed to answer the question directly, instead you should extract entities in the problem for further retrieval. 
+
+We should prompt simple and concise entities that are strictly the conditions in the query rather than any maked up entities. If you are not certain/sure, when you use the word 'maybe' or 'perhaps', for something or find your self repeat too much, please simply prompt one or few of the the most simple or general relations as posible.
+
 Query: "{query}"
-Entities:
 
 """
 
@@ -88,7 +92,7 @@ def name_to_id(name):
 def get_candidate_wikidata_entities(term):
     # search wikipedia and link
     if len(term) >= 300:
-        print(f"Search term ({term}) is too long")
+        logger.info(f"Search term ({term}) is too long")
         return [], []
     results = wikipedia.search(term, results=20)
     wikidata_ids = []
@@ -97,7 +101,7 @@ def get_candidate_wikidata_entities(term):
     titles_to_qid = titles_to_qids(results)
     for r in results:
         if r not in titles_to_qid:
-            print(f"Could not match title {r} to QID")
+            logger.info(f"Could not match title {r} to QID")
             continue
         wikidata_ids.append(titles_to_qid[r])
         final_results.append(r)
@@ -150,19 +154,19 @@ def match_entity(context, ent, candidates, llm):
     options = [f"{i + 1}: {lab_desc}" for i, lab_desc in enumerate(candidates)]
     options = '\n'.join(options)
     match_prompt = match_prompt_template.format(**{'context': context, 'options': options, 'text': ent})
-    print(match_prompt)
-    result = llm(match_prompt, n=1, stop="\n\n")
+    logger.info(match_prompt)
+    result = llm(match_prompt, n=1, stop="\n\n", max_token= 4096)
     try:
         best_match_idx = int(re.search("\d+", result[0])[0]) - 1
-        print(f"Matched:\n\t{ent}\n\t{candidates[best_match_idx]}")
+        logger.info(f"Matched:\n\t{ent}\n\t{candidates[best_match_idx]}")
     except ValueError:
-        print(f"No match found: {result[0]}")
+        logger.info(f"No match found: {result[0]}")
         best_match_idx = None
     except IndexError:
-        print(f"Invalid option selected: {result[0]}")
+        logger.info(f"Invalid option selected: {result[0]}")
         best_match_idx = None
     except TypeError:
-        print(f"Invalid option selected: {result[0]}")
+        logger.info(f"Invalid option selected: {result[0]}")
         best_match_idx = None
 
     return best_match_idx
@@ -184,7 +188,7 @@ def match_entities_wikidata(query, entities, model):
                 options_qid.append(qid)
             except KeyError:
                 continue
-                # print(f"could not append results for {qid}")
+                # logger.info(f"could not append results for {qid}")
         idx = match_entity(query, e, options, model)
         if idx is None:
             unmatched_entities.append(e)

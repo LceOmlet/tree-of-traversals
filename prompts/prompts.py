@@ -1,8 +1,7 @@
-ACTION_DESCRIPTIONS_TEXT = """You are a superintelligent AI equipped with the ability to search a knowledge graph for definitive, \
-up-to-date answers. Your task is to interface with the knowledge graph in order to answer the above query. \
-You will be able to expand the knowledge graph until you have found the answer. Think in detail before acting or answering.\
+ACTION_DESCRIPTIONS_TEXT = """Your task is to interface with the knowledge graph in order to answer the above query. \
+You will be able to expand the knowledge graph until you have found the answer. Think to resolve contradictions, explain when the contradiction is not resolvable or to generous to resolve.\
 
-Available actions:
+Formmating rule & available actions:
 'THINK' - Generate relevant thoughts to solving the problem. This could include recalling well known facts from memory.
 \te.g.
 \t\tTHINK: I should search for the movies directed by...
@@ -15,6 +14,9 @@ Available actions:
 \t\tANSWER: No
 \t\tANSWER: Harry Potter
 \t\tANSWER: [Harry Potter, Ron Weasley, Hermione Granger]
+
+Please strictly and directly prompt out the results formated as the **formmating rule** describes after thinking like the above listed results.
+If you are not certain/sure for something or find your self repeat too much, please make simple reflection to end the task.
 
 """
 

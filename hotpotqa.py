@@ -10,6 +10,9 @@ from langchain.callbacks import get_openai_callback
 
 from treeoftraversals import TreeOfTraversals
 
+import logging
+logger = logging.getLogger(__name__)
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--results_file', type=str, help='File to save results in', default='qald10_results.json')
 parser.add_argument('--sample_breadth', type=int, help='Samples per node', default=1)
@@ -58,8 +61,8 @@ def score_answers(answer, label):
 def get_question_from_hotpot(data, i):
     question = data[i]['question']
     answer = data[i]['answer']
-    print(f"Question: {data[i]['question']}")
-    print(f"Correct Answer: {data[i]['answer']}")
+    logger.info(f"Question: {data[i]['question']}")
+    logger.info(f"Correct Answer: {data[i]['answer']}")
     return question, answer
 
 for i in idxs[:20]:
@@ -69,11 +72,11 @@ for i in idxs[:20]:
     with get_openai_callback() as cb:
         tree = TreeOfTraversals(sample_breadth=args.sample_breadth, max_depth=args.max_depth)
         final_answer = tree.run(query)
-    print(final_answer)
-    print(f"Total Tokens: {cb.total_tokens}")
-    print(f"Prompt Tokens: {cb.prompt_tokens}")
-    print(f"Completion Tokens: {cb.completion_tokens}")
-    print(f"Total Cost (USD): ${cb.total_cost}")
+    logger.info(final_answer)
+    logger.info(f"Total Tokens: {cb.total_tokens}")
+    logger.info(f"Prompt Tokens: {cb.prompt_tokens}")
+    logger.info(f"Completion Tokens: {cb.completion_tokens}")
+    logger.info(f"Total Cost (USD): ${cb.total_cost}")
     score = score_answers(final_answer, label)
     state = tree.answer_state()
     results[i] = {
@@ -91,6 +94,6 @@ for i in idxs[:20]:
     # r, info = webthink(i, to_print=True)
     # rs.append(info['em'])
     # infos.append(info)
-    # print(sum(rs), len(rs), sum(rs) / len(rs), (time.time() - old_time) / len(rs))
-    # print('-----------')
-    # print()
+    # logger.info(sum(rs), len(rs), sum(rs) / len(rs), (time.time() - old_time) / len(rs))
+    # logger.info('-----------')
+    # logger.info()

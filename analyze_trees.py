@@ -269,9 +269,9 @@ def main():
     score_without_backtrack_on_answer = np.mean([r['first_rejected_score'] for r in results.values() if 'first_rejected_score' in r])
     x = ['No Backtrack on Answer', 'Yes Backtrack on Answer']
     y = np.array([score_without_backtrack_on_answer, score_with_backtrack_on_answer])
-    print(x[0], y[0])
-    print(x[1], y[1])
-    print('num backtrack counterfactuals', num_backtrack_counterfactuals)
+    logger.info(x[0], y[0])
+    logger.info(x[1], y[1])
+    logger.info('num backtrack counterfactuals', num_backtrack_counterfactuals)
     plt.style.use('seaborn-v0_8-whitegrid')
     plt.bar([], [])
     bars = plt.bar(x, y)
@@ -320,8 +320,8 @@ def main():
     # plt.show()
     plt.close()
 
-    print("Correlation between answer values and answer scores")
-    print(np.corrcoef(all_ans_vals, all_ans_scores))
+    logger.info("Correlation between answer values and answer scores")
+    logger.info(np.corrcoef(all_ans_vals, all_ans_scores))
 
     df = pd.DataFrame({'Value': all_ans_vals, 'Answer Score': all_ans_scores})
     jittered_df = df + + np.random.normal(0, 0.05, size=(len(df), 2))
@@ -343,8 +343,8 @@ def main():
     counts_correct_filtered = counts_correct[np.isin(val_correct, val_intersect)]
     counts_incorrect_filtered = counts_incorrect[np.isin(val_incorrect, val_intersect)]
     ratio = counts_correct_filtered / (counts_correct_filtered + counts_incorrect_filtered)
-    print(f"Ratio correct for value 0.0: {ratio[0]}")
-    print(f"Ratio correct for value 1.0: {ratio[-1]}")
+    logger.info(f"Ratio correct for value 0.0: {ratio[0]}")
+    logger.info(f"Ratio correct for value 1.0: {ratio[-1]}")
     plt.style.use('seaborn-v0_8-whitegrid')
     plt.plot(val_intersect, ratio, '-o')
     plt.xlabel('Value Function for Answer State')

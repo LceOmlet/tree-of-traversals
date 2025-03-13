@@ -21,7 +21,7 @@ def main(args):
         model = llm.get_llm(args.llm, n=args.sample_breadth)
         tree = TreeOfTraversals(llm=model, sample_breadth=args.sample_breadth, max_depth=args.max_depth, knowledge_bases=args.knowledge_bases)
         final_answer = tree.run(query)
-    print(final_answer)
+    logger.info(final_answer)
     return final_answer, tree
 
 if __name__ == "__main__":

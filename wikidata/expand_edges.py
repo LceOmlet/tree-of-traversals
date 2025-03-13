@@ -139,4 +139,4 @@ if __name__ == '__main__':
     import pprint
     entities = ['Q25188', 'Q13417189']
     prop = 'P361'
-    pprint.pprint(get_edges(entities, prop, True))
+    pprint.plogger.info(get_edges(entities, prop, True))

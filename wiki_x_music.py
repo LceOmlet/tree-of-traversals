@@ -86,8 +86,8 @@ def score_answers(answer, label):
 def get_question_from_wiki_x_music(data, i):
     question = data['Question'][i]
     answer = data['Answer'][i]
-    print(f"Question: {question}")
-    print(f"Correct Answer: {answer}")
+    logger.info(f"Question: {question}")
+    logger.info(f"Correct Answer: {answer}")
     return question, answer
 
 def main():
@@ -109,7 +109,7 @@ def main():
                 try:
                     final_answer = tree.run(query)
                 except Exception as e:
-                    print(e)
+                    logger.info(e)
                     continue
             score = score_answers(final_answer, label)
             state = tree.answer_state()
@@ -142,13 +142,13 @@ def main():
                 'score': score,
                 'thoughts': thoughts
             }
-        print(f'Expected: {label}')
-        print(f'Got: {final_answer}')
-        print(f"Score: {score}")
-        print(f"Total Tokens: {cb.total_tokens}")
-        print(f"Prompt Tokens: {cb.prompt_tokens}")
-        print(f"Completion Tokens: {cb.completion_tokens}")
-        print(f"Total Cost (USD): ${cb.total_cost}")
+        logger.info(f'Expected: {label}')
+        logger.info(f'Got: {final_answer}')
+        logger.info(f"Score: {score}")
+        logger.info(f"Total Tokens: {cb.total_tokens}")
+        logger.info(f"Prompt Tokens: {cb.prompt_tokens}")
+        logger.info(f"Completion Tokens: {cb.completion_tokens}")
+        logger.info(f"Total Cost (USD): ${cb.total_cost}")
         json.dump(results, open(RESULTS_FILE, 'w'), indent=4)
         #
         #
@@ -156,9 +156,9 @@ def main():
         # r, info = webthink(i, to_print=True)
         # rs.append(info['em'])
         # infos.append(info)
-        # print(sum(rs), len(rs), sum(rs) / len(rs), (time.time() - old_time) / len(rs))
-        # print('-----------')
-        # print()
+        # logger.info(sum(rs), len(rs), sum(rs) / len(rs), (time.time() - old_time) / len(rs))
+        # logger.info('-----------')
+        # logger.info()
 
 
 if __name__ == "__main__":

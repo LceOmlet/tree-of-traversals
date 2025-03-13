@@ -38,8 +38,8 @@ def get_data(entity_id, entity_type, includes="all"):
         includes = None
     else:
         includes = includes
-    # print(relations_url)
-    # print(includes)
+    # logger.info(relations_url)
+    # logger.info(includes)
     params = {
         "fmt": "json",
         "inc": includes
@@ -65,7 +65,7 @@ def get_relations(entity_id, entity_type):
 
     # Print or process the relation types
     # for relation_type in relation_types:
-    #     print(relation_type)
+    #     logger.info(relation_type)
 
     props = [p[0] for p in relation_types]
     labels = [p[1] for p in relation_types]

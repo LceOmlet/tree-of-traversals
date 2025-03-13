@@ -14,20 +14,20 @@ def match_entity(context, ent, candidates, llm):
     options = [f"{i + 1}: {lab_desc}" for i, lab_desc in enumerate(candidates)]
     options = '\n'.join(options)
     match_prompt = match_prompt_template.format(**{'context': context, 'options': options, 'text': ent})
-    print(match_prompt)
+    logger.info(match_prompt)
     result = llm(match_prompt, n=1)  # TODO: revert this
     # result = llm(messages=[HumanMessage(content=match_prompt)])
     try:
         best_match_idx = int(re.search("\d+", result[0])[0]) - 1
-        print(f"Matched:\n\t{ent}\n\t{candidates[best_match_idx]}")
+        logger.info(f"Matched:\n\t{ent}\n\t{candidates[best_match_idx]}")
     except ValueError:
-        print(f"No match found: {result[0]}")
+        logger.info(f"No match found: {result[0]}")
         best_match_idx = None
     except IndexError:
-        print(f"Invalid option selected: {result[0]}")
+        logger.info(f"Invalid option selected: {result[0]}")
         best_match_idx = None
     except TypeError:
-        print(f"Invalid option selected: {result[0]}")
+        logger.info(f"Invalid option selected: {result[0]}")
         best_match_idx = None
 
     return best_match_idx

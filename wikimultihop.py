@@ -14,7 +14,8 @@ from chain_of_thought_baseline import chain_of_thought
 from llm import get_llm
 from treeoftraversals import TreeOfTraversals
 
-
+import logging
+logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--results_file', type=str, help='File to save results in', default='qald10_results.json')
@@ -94,8 +95,8 @@ def score_answers(answer, label):
 def get_question_from_2wiki(data, i):
     question = data[i]['question']
     answer = data[i]['answer']
-    print(f"Question: {question}")
-    print(f"Correct Answer: {answer}")
+    logger.info(f"Question: {question}")
+    logger.info(f"Correct Answer: {answer}")
     return question, answer
 
 def main():
@@ -118,7 +119,7 @@ def main():
                     from bdb import BdbQuit
                     if isinstance(e, BdbQuit):
                         raise e
-                    print(f"encountered exception, skipping: {e}")
+                    logger.info(f"encountered exception, skipping: {e}")
                     continue
             score = score_answers(final_answer, label)
             state = tree.answer_state()
@@ -148,13 +149,13 @@ def main():
                 'score': score,
                 'thoughts': thoughts
             }
-        print(f'Expected: {label}')
-        print(f'Got: {final_answer}')
-        print(f"Score: {score}")
-        print(f"Total Tokens: {cb.total_tokens}")
-        print(f"Prompt Tokens: {cb.prompt_tokens}")
-        print(f"Completion Tokens: {cb.completion_tokens}")
-        print(f"Total Cost (USD): ${cb.total_cost}")
+        logger.info(f'Expected: {label}')
+        logger.info(f'Got: {final_answer}')
+        logger.info(f"Score: {score}")
+        logger.info(f"Total Tokens: {cb.total_tokens}")
+        logger.info(f"Prompt Tokens: {cb.prompt_tokens}")
+        logger.info(f"Completion Tokens: {cb.completion_tokens}")
+        logger.info(f"Total Cost (USD): ${cb.total_cost}")
         json.dump(results, open(RESULTS_FILE, 'w'), indent=4)
         #
         #
@@ -162,9 +163,9 @@ def main():
         # r, info = webthink(i, to_print=True)
         # rs.append(info['em'])
         # infos.append(info)
-        # print(sum(rs), len(rs), sum(rs) / len(rs), (time.time() - old_time) / len(rs))
-        # print('-----------')
-        # print()
+        # logger.info(sum(rs), len(rs), sum(rs) / len(rs), (time.time() - old_time) / len(rs))
+        # logger.info('-----------')
+        # logger.info()
 
 
 if __name__ == "__main__":

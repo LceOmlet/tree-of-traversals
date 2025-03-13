@@ -16,7 +16,8 @@ import bedrock
 import botocore
 
 OPENAI_ERRORS = (openai.error.Timeout, openai.error.ServiceUnavailableError, openai.error.APIError, openai.error.APIConnectionError)
-
+import logging
+logger = logging.getLogger(__name__)
 
 class OPENAI_LLM:
     def __init__(self, model_id, n=1):
@@ -263,43 +264,163 @@ class SagemakerLLM:
         return result
 
     
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, BitsAndBytesConfig
+import torch
+
+import re
+from transformers import StoppingCriteria, StoppingCriteriaList
+
+class TextRepeatStopping(StoppingCriteria):
+    def __init__(self, tokenizer, repeat_threshold=3, min_pattern_len=2):
+        """
+        Args:
+            tokenizer: 分词器用于解码
+            repeat_threshold: 重复次数阈值（连续出现该次数时停止）
+            min_pattern_len: 最小重复单元长度（避免检测单字符重复）
+        """
+        self.tokenizer = tokenizer
+        self.repeat_threshold = repeat_threshold
+        self.min_pattern_len = min_pattern_len
+
+    def has_repeat_pattern(self, text):
+        """滑动窗口检测连续重复"""
+        max_check_len = len(text) // self.repeat_threshold
+        
+        # 遍历所有可能的重复单元长度
+        for pattern_len in range(self.min_pattern_len, max_check_len + 1):
+            # 滑动窗口检查每个起始位置
+            for start in range(0, len(text) - pattern_len * self.repeat_threshold + 1):
+                # 提取候选重复单元
+                candidate = text[start : start + pattern_len]
+                
+                # 检查后续是否连续重复
+                is_repeating = True
+                for i in range(1, self.repeat_threshold):
+                    current_segment = text[
+                        start + pattern_len * i : 
+                        start + pattern_len * (i + 1)
+                    ]
+                    if current_segment != candidate:
+                        is_repeating = False
+                        break
+                
+                if is_repeating:
+                    logger.info(f"检测到重复模式: '{candidate}' x{self.repeat_threshold}")  # 调试输出
+                    return True
+        return False
+
+    def __call__(self, input_ids, scores, **kwargs):
+        # 批量安全：遍历所有生成序列
+        for seq_idx in range(input_ids.shape[0]):
+            # 解码时保留原始空格（避免误判）
+            current_text = self.tokenizer.decode(
+                input_ids[seq_idx], 
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False
+            )
+            
+            # 只在足够长时开始检测
+            if len(current_text) >= self.min_pattern_len * self.repeat_threshold:
+                if self.has_repeat_pattern(current_text):
+                    return True
+        return False
+
+
 class HUGGINGFACE_LLM:
     def __init__(self, model_id, n=1):
         self.n = n
-        self.pipe = self.create_pipe(model_id, n=n)
+        self.tokenizer = None
+        self.pipe = self.create_pipe(model_id)
 
     def create_pipe(self, model_id):
-        model_id = model_id
+        """初始化量化模型管道"""
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.bfloat16
         )
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        # model_4bit = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=bnb_config, device_map="auto",
-        #                                                   trust_remote_code=True)
-        model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", trust_remote_code=True)
-        pipe = pipeline(
-            "text-generation",
-            model=model,
-            tokenizer=tokenizer,
-            use_cache=True,
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            # quantization_config=bnb_config,
             device_map="auto",
-            max_new_tokens=20,
-            do_sample=True,
-            top_k=1,
-            num_return_sequences=self.n,
-            eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id,
             trust_remote_code=True
         )
-        return pipe
+        
+        stopping_criteria = StoppingCriteriaList([
+            TextRepeatStopping(self.tokenizer, repeat_threshold=3)
+        ])
 
-    def __call__(self, prompt, n=None):
+        
+        return pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=self.tokenizer,
+            device_map="auto",
+            trust_remote_code=True,
+            # stopping_criteria = stopping_criteria,
+            repetition_penalty = 1.0
+        )
+
+    def __call__(self, prompt, n=None, **kwargs):
+        """统一接口格式：
+        - 单prompt多生成：输入str返回[n个结果]
+        - 多prompt批量生成：输入list返回[[n个结果], [n个结果], ...]
+        """
+        max_tokens =1024
         n = n or self.n
-        result = self.pipe(prompt)
-        return result
+        is_batch = isinstance(prompt, list)
+        
+        # 生成参数设置
+        if kwargs.get("temperature", 1.0):
+            generate_args = {
+                "max_new_tokens": kwargs.get("max_tokens", max_tokens),
+                "do_sample": True,
+                "top_k": 1,
+                "temperature": kwargs.get("temperature", 1.0),
+                "num_return_sequences": n,
+                "eos_token_id": self.tokenizer.eos_token_id,
+                "pad_token_id": self.tokenizer.eos_token_id,
+                "return_full_text": False  # 只返回生成内容
+            }
+        else:
+            generate_args = {
+                "do_sample": False,
+                "max_new_tokens": kwargs.get("max_tokens", max_tokens),
+                "top_k": 1,
+                "temperature": kwargs.get("temperature", 1.0),
+                "num_return_sequences": n,
+                "eos_token_id": self.tokenizer.eos_token_id,
+                "pad_token_id": self.tokenizer.eos_token_id,
+                "return_full_text": False  # 只返回生成内容
+            }
+        
+        # 批量生成时自动计算batch_size
+        if is_batch:
+            generate_args["batch_size"] = len(prompt)
+        
+        # 执行生成
+        # logger.info(prompt)
+        logger.info(f"Generating..")
+        results = self.pipe("<｜User｜>" + prompt + "<｜Assistant｜>", **generate_args)
+        
+        # 重组结果格式
+        if is_batch:
+            return [[item['generated_text'] for item in results[i*n:(i+1)*n]] 
+                    for i in range(len(prompt))]
+        else:
+            rst = []
+            for item in results:
+                s = item['generated_text']
+                index = s.rfind("</think>")
+                logger.info(f"Think: {s[:index]}")
+                result = s[index + len("</think>"):] if index != -1 else ""
+                logger.info(f"Answer: {result}")
+                rst.append(result)
+            return rst
+
 
 
 def get_llm(model_id, n=1):
@@ -311,6 +432,9 @@ def get_llm(model_id, n=1):
         return CohereBedrockLLM(model_id, n=n)
     elif 'llama' in model_id:
         return Llama2Bedrock(model_id, n=n)
+    elif 'hf,' in model_id:
+        model_name = model_id.split(",")[1]
+        return HUGGINGFACE_LLM(model_name, n=n)
     else:
         return SagemakerLLM(model_id, n=n)
 
@@ -321,4 +445,4 @@ def get_llm(model_id, n=1):
 # if __name__ == "__main__":
 #     LLM_MODEL = get_llm(MODEL_ID, None)
 #     result = LLM_MODEL([HumanMessage(content="Who is the matrix made for?")])
-#     print(result.content)
+#     logger.info(result.content)

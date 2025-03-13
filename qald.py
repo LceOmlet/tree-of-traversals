@@ -14,9 +14,13 @@ from langchain.callbacks import get_openai_callback
 from chain_of_thought_baseline import chain_of_thought
 from llm import get_llm
 from treeoftraversals import TreeOfTraversals
-
+import traceback
 from SPARQLWrapper import SPARQLWrapper, JSON, SPARQLExceptions
-
+import logging
+from logging import StreamHandler
+import logging
+logger = logging.getLogger(__name__)
+import inspect
 parser = argparse.ArgumentParser()
 parser.add_argument('--results_file', type=str, help='File to save results in', default='qald10_results.json')
 parser.add_argument('--sample_breadth', type=int, help='Samples per node', default=1)
@@ -26,7 +30,53 @@ parser.add_argument('--llm', type=str, help='What base llm to use', default='gpt
 
 args = parser.parse_args()
 
+def setup_logging():
+    class StackFormatter(logging.Formatter):
+        def format(self, record):
+            # 获取调用栈并过滤掉logging模块的帧
+            stack = inspect.stack()
+            user_frames = []
+            for frame_info in stack[1:]:
+                frame = frame_info.frame
+                module = inspect.getmodule(frame)
+                if module and module.__name__.startswith('logging'):
+                    continue
+                # 收集用户代码的帧，最多三层
+                user_frames.append(frame_info)
+                if len(user_frames) >= 5:
+                    break
+            
+            # 构建栈信息字符串
+            stack_trace = []
+            for frame_info in user_frames:
+                filename = frame_info.filename
+                lineno = frame_info.lineno
+                func_name = frame_info.function
+                stack_trace.append(f"{filename}:{lineno} - {func_name}()")
+            record.stack_info = "\n".join(stack_trace[::-1])
+            
+            return super().format(record)
 
+    # 使用自定义的Formatter
+    formatter = StackFormatter(
+        "%(asctime)s - %(name)s - %(levelname)s - "
+        " %(message)s\n"
+        "Stack Trace:\n%(stack_info)s"
+    )
+    # formatter = logging.Formatter(
+    #     "%(asctime)s - %(name)s - %(levelname)s - "
+    #     "%(filename)s:%(lineno)d:%(funcName)s \n - %(stack_info)s - %(message)s "
+    # )
+    handler = StreamHandler(
+        # "app.log", maxBytes=1024*1024, backupCount=5
+    )
+    handler.setFormatter(formatter)
+
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(handler)
+
+setup_logging()
 
 # sparql = SPARQLWrapper("https://query.wikidata.org/sparql")
 # sparql.setReturnFormat(JSON)
@@ -203,8 +253,8 @@ def get_question_from_qald(data, i):
         raise ValueError("Unable to update answer")
     # answers = data['questions'][i]['answers'][0]
     answers = get_answer(answers)
-    print(f"Question: {question}")
-    print(f"Correct Answer: {answers}")
+    logger.info(f"Question: {question}")
+    logger.info(f"Correct Answer: {answers}")
     return question, answers
 
 
@@ -219,20 +269,27 @@ for i in idxs[:500]:
             json.dump(results, open(RESULTS_FILE, 'w'), indent=4)
         r['score'] = score_answers(r['predicted_answer'], r['answer'])
         continue
-    try:
-        query, label = get_question_from_qald(data, i)
-    except ValueError:
-        continue
+    error = True
+    while error:
+        try:
+            query, label = get_question_from_qald(data, i)
+            error = False
+        except ValueError:
+            error = False
+            continue
+        except:
+            error = True
     if not label:
         continue
     if args.model == 'tree-of-traversals':
         with get_openai_callback() as cb:
-            llm.reset_counts()
+            # llm.reset_counts()
             tree = TreeOfTraversals(llm=llm, sample_breadth=args.sample_breadth, max_depth=args.max_depth, knowledge_bases=['wikidata'])
             try:
                 final_answer = tree.run(query)
             except Exception as e:
-                print(e)
+                traceback.print_exc()
+                logger.info(e)
                 continue
         score = score_answers(final_answer, label)
         state = tree.answer_state()
@@ -251,12 +308,13 @@ for i in idxs[:500]:
             'prompt_tokens': llm.prompt_tokens,
             'completion_tokens': llm.completion_tokens
         }
+        logger.info(f"Predicted Answer: {final_answer}")
     elif args.model == 'chain-of-thought':
         with get_openai_callback() as cb:
             final_answer, thoughtprocess = chain_of_thought(query, llm)
         score = score_answers(final_answer, label)
-        print(thoughtprocess)
-        print(final_answer)
+        logger.info(thoughtprocess)
+        logger.info(final_answer)
         results[i] = {
             'question': query,
             'answer': label,
@@ -264,13 +322,13 @@ for i in idxs[:500]:
             'score': score,
             'thoughts': thoughtprocess
         }
-    print(f'Expected: {label}')
-    print(f'Got: {final_answer}')
-    print(f"Score: {score}")
-    print(f"Total Tokens: {cb.total_tokens}")
-    print(f"Prompt Tokens: {cb.prompt_tokens}")
-    print(f"Completion Tokens: {cb.completion_tokens}")
-    print(f"Total Cost (USD): ${cb.total_cost}")
+    logger.info(f'Expected: {label}')
+    logger.info(f'Got: {final_answer}')
+    logger.info(f"Score: {score}")
+    logger.info(f"Total Tokens: {cb.total_tokens}")
+    logger.info(f"Prompt Tokens: {cb.prompt_tokens}")
+    logger.info(f"Completion Tokens: {cb.completion_tokens}")
+    logger.info(f"Total Cost (USD): ${cb.total_cost}")
     json.dump(results, open(RESULTS_FILE, 'w'), indent=4)
 json.dump(results, open(RESULTS_FILE, 'w'), indent=4)
     #
@@ -279,6 +337,6 @@ json.dump(results, open(RESULTS_FILE, 'w'), indent=4)
     # r, info = webthink(i, to_print=True)
     # rs.append(info['em'])
     # infos.append(info)
-    # print(sum(rs), len(rs), sum(rs) / len(rs), (time.time() - old_time) / len(rs))
-    # print('-----------')
-    # print()
+    # logger.info(sum(rs), len(rs), sum(rs) / len(rs), (time.time() - old_time) / len(rs))
+    # logger.info('-----------')
+    # logger.info()

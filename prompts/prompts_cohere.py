@@ -2,7 +2,7 @@ ACTION_DESCRIPTIONS_TEXT = """You are a superintelligent AI equipped with the ab
 up-to-date answers. Your task is to interface with the knowledge graph in order to answer the above query. \
 You will be able to expand the knowledge graph until you have found the answer. Think in detail before acting or answering.\
 
-Available actions:
+Formmating rule & available actions:
 'THINK' - Generate relevant thoughts to solving the problem. This could include recalling well known facts from memory.
 \te.g.
 \t\tTHINK: I should search for the movies directed by...
@@ -16,10 +16,13 @@ Available actions:
 \t\tANSWER: Harry Potter
 \t\tANSWER: [Harry Potter, Ron Weasley, Hermione Granger]
 
+Please strictly and directly prompt out the results formated as the **formmating rule** describes after thinking like the above listed results.
+If you are not certain/sure for something or find your self repeat too much, please make simple reflection to end the task.
+
 """
 
 
-BASE_ACTION_SELECTION_PROMPT = ACTION_DESCRIPTIONS_TEXT + """Next action [{options}]:"""
+BASE_ACTION_SELECTION_PROMPT = ACTION_DESCRIPTIONS_TEXT + """Directly prompt out the next action [{options}]:"""
 
 ANSWER_PROMPT = """Give your best answer based on the knowledge graph. Give your reasoning and then state the best answer.
 
